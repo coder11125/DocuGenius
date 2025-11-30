@@ -5,20 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     
-    <!-- PWA & Mobile Optimization (Chrome, Edge, Brave) -->
+    <!-- PWA & Mobile Optimization -->
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
     <meta name="mobile-web-app-capable" content="yes">
-
-    <!-- iOS Safari Optimization -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="DocuGenius">
 
-    <title>DocuGenius</title>
+    <title>DocuGenius - AI Word Processor</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            750: '#2d3748',
+                            850: '#1a202c',
+                            950: '#0d1117',
+                        }
+                    },
+                    animation: {
+                        'popIn': 'popIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'slideIn': 'slideIn 0.3s ease-out forwards',
+                        'fadeIn': 'fadeIn 0.3s ease-out forwards',
+                    },
+                    keyframes: {
+                        popIn: {
+                            'from': { transform: 'scale(0.95)', opacity: 0 },
+                            'to': { transform: 'scale(1)', opacity: 1 },
+                        },
+                        slideIn: {
+                            'from': { transform: 'translateX(100%)', opacity: 0 },
+                            'to': { transform: 'translateX(0)', opacity: 1 },
+                        },
+                        fadeIn: {
+                            'from': { opacity: 0, transform: 'translateY(5px)' },
+                            'to': { opacity: 1, transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- CRITICAL FIX FOR SAFARI: ES Module Shims for Import Maps support -->
+    <script async src="https://ga.jspm.io/npm:es-module-shims@1.7.0/dist/es-module-shims.js"></script>
     
     <!-- Babel for JSX compilation in browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -40,52 +76,81 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
-            overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+            overscroll-behavior-y: none;
+            /* Use dynamic viewport height for iOS Safari */
+            min-height: 100dvh; 
         }
 
-        /* Custom Scrollbar Hiding (Cross-Browser) */
         .scrollbar-hide {
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
         .scrollbar-hide::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, Brave, Opera */
+            display: none;
         }
 
-        /* Content Editable Focus Removal (Safari/Chrome) */
+        /* Refined Custom Scrollbar Theme */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.5);
+            border: 3px solid transparent;
+            border-radius: 99px;
+            background-clip: content-box;
+            transition: background-color 0.2s;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(107, 114, 128, 0.8);
+        }
+
+        .dark ::-webkit-scrollbar-thumb {
+            background-color: rgba(71, 85, 105, 0.6);
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(100, 116, 139, 0.9);
+        }
+
         [contenteditable]:focus {
             outline: none;
         }
 
-        /* Animation Classes */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-            animation: fadeIn 0.3s ease-out forwards;
+        /* iOS Scrolling Fix */
+        .ios-scroll {
+            -webkit-overflow-scrolling: touch;
         }
 
-        /* Print Styles */
         @media print {
             .no-print { display: none !important; }
             body { background: white !important; color: black !important; }
             .print-content { box-shadow: none !important; margin: 0 !important; width: 100% !important; transform: none !important; padding: 0 !important; }
-            /* Ensure background colors print */
             * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>
-<body class="bg-[#f0f0f0] text-[#323130] font-sans overflow-hidden transition-colors duration-200 selection:bg-[#b3d7ff] selection:text-black">
+<body class="bg-[#f8f9fa] text-[#323130] font-sans overflow-hidden transition-colors duration-200 selection:bg-[#b3d7ff] selection:text-black h-[100dvh]">
     
-    <div id="root"></div>
+    <!-- Fixed Root Container: Removed centering classes to allow full width -->
+    <div id="root" class="h-full w-full">
+        <!-- Loading State for Slow Connections/Safari Init -->
+        <div class="flex items-center justify-center h-full animate-pulse">
+            <div class="text-center">
+                <div class="text-4xl font-bold text-gray-300 mb-4">DocuGenius</div>
+                <div class="text-gray-400 text-sm">Loading workspace...</div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Application Script -->
     <script type="text/babel" data-type="module">
         import React, { useState, useRef, useEffect, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
-            Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, 
+            Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify,
             List, ListOrdered, Type, Highlighter, Sparkles, X, 
             MessageSquarePlus, FileText, Download, Share2, 
             Undo, Redo, Save, Check, Minus, Plus, ZoomIn,
@@ -96,174 +161,21 @@
             ChevronDown, Search, Menu, ChevronUp, FileType, File, Cloud, 
             MoreVertical, Trash2, Edit2, ArrowLeft, PlusSquare, Briefcase, 
             FileText as FileTextIcon, ClipboardList, Receipt, Newspaper, User, BarChart3,
-            Moon, Sun, Monitor
+            Moon, Sun, Monitor, LayoutGrid, List as ListIcon, Info, AlertCircle,
+            Strikethrough, Subscript, Superscript, Eraser, Indent, Outdent, MoveVertical,
+            Wand2, Minimize2, PenTool, Zap, GraduationCap
         } from 'lucide-react';
 
         // --- Configuration ---
         const API_KEY = "AIzaSyAjxNqUdB_8i3SHWtvX5l5ukaA8eFNlk30"; 
         const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
 
-        // --- Template Data ---
-        const TEMPLATES = [
-            {
-                id: 'resume',
-                name: 'Resume',
-                thumbnailColor: 'bg-blue-50',
-                icon: <Briefcase size={32} className="text-blue-500 opacity-50" />,
-                content: `
-                    <h1 style="text-align: center; color: #2b579a;">[Your Name]</h1>
-                    <p style="text-align: center;">123 Main St | (555) 123-4567 | email@example.com</p>
-                    <hr />
-                    <h3 style="color: #2b579a;">Professional Summary</h3>
-                    <p>Experienced professional with a strong background in...</p>
-                    <h3 style="color: #2b579a;">Experience</h3>
-                    <p><strong>Job Title</strong> - Company Name (2020 - Present)</p>
-                    <ul><li>Key achievement one...</li><li>Key achievement two...</li></ul>
-                    <h3 style="color: #2b579a;">Education</h3>
-                    <p><strong>Bachelor of Science</strong> - University Name</p>
-                `
-            },
-            {
-                id: 'cover-letter',
-                name: 'Cover Letter',
-                thumbnailColor: 'bg-indigo-50',
-                icon: <User size={32} className="text-indigo-500 opacity-50" />,
-                content: `
-                    <p><strong>[Your Name]</strong><br/>[Address]<br/>[Phone]<br/>[Email]</p>
-                    <br/>
-                    <p>${new Date().toLocaleDateString()}</p>
-                    <br/>
-                    <p><strong>Hiring Manager</strong><br/>[Company Name]<br/>[Company Address]</p>
-                    <br/>
-                    <p>Dear Hiring Manager,</p>
-                    <br/>
-                    <p>I am writing to express my interest in the [Position Name] position at [Company Name]...</p>
-                    <br/>
-                    <p>Sincerely,</p>
-                    <br/>
-                    <p>[Your Name]</p>
-                `
-            },
-            {
-                id: 'proposal',
-                name: 'Project Proposal',
-                thumbnailColor: 'bg-purple-50',
-                icon: <FileTextIcon size={32} className="text-purple-500 opacity-50" />,
-                content: `
-                    <h1 style="color: #4a148c;">Project Proposal: [Project Title]</h1>
-                    <p><strong>Prepared by:</strong> [Your Name]</p>
-                    <br/>
-                    <h2>1. Executive Summary</h2>
-                    <p>Brief overview of the project goals and objectives.</p>
-                    <h2>2. Project Objectives</h2>
-                    <ul><li>Objective 1</li><li>Objective 2</li></ul>
-                    <h2>3. Timeline</h2>
-                    <p>Estimated completion date: [Date]</p>
-                `
-            },
-            {
-                id: 'minutes',
-                name: 'Meeting Minutes',
-                thumbnailColor: 'bg-teal-50',
-                icon: <ClipboardList size={32} className="text-teal-500 opacity-50" />,
-                content: `
-                    <h1 style="text-align:center;">Meeting Minutes</h1>
-                    <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                    <p><strong>Time:</strong> 10:00 AM</p>
-                    <p><strong>Attendees:</strong> [List Attendees]</p>
-                    <hr/>
-                    <h3>Agenda</h3>
-                    <ol><li>Topic 1</li><li>Topic 2</li></ol>
-                    <h3>Discussion</h3>
-                    <p>Notes on discussion points...</p>
-                    <h3>Action Items</h3>
-                    <ul><li>[ ] Action 1 (Owner)</li><li>[ ] Action 2 (Owner)</li></ul>
-                `
-            },
-            {
-                id: 'invoice',
-                name: 'Invoice',
-                thumbnailColor: 'bg-emerald-50',
-                icon: <Receipt size={32} className="text-emerald-500 opacity-50" />,
-                content: `
-                    <h1 style="text-align:right; color:#059669;">INVOICE</h1>
-                    <p><strong>Invoice #:</strong> 001</p>
-                    <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                    <br/>
-                    <div style="display:flex; justify-content:space-between;">
-                        <div>
-                            <strong>Bill To:</strong><br/>
-                            [Client Name]<br/>[Client Address]
-                        </div>
-                        <div>
-                            <strong>From:</strong><br/>
-                            [Your Name]<br/>[Your Address]
-                        </div>
-                    </div>
-                    <br/>
-                    <table style="width:100%; border-collapse:collapse; margin-top:20px;" border="1">
-                        <tr style="background:#f0fdf4;">
-                            <th style="padding:8px; text-align:left;">Description</th>
-                            <th style="padding:8px; text-align:right;">Amount</th>
-                        </tr>
-                        <tr>
-                            <td style="padding:8px;">Service 1</td>
-                            <td style="padding:8px; text-align:right;">$0.00</td>
-                        </tr>
-                    </table>
-                    <h3 style="text-align:right; margin-top:20px;">Total: $0.00</h3>
-                `
-            },
-            {
-                id: 'newsletter',
-                name: 'Newsletter',
-                thumbnailColor: 'bg-orange-50',
-                icon: <Newspaper size={32} className="text-orange-500 opacity-50" />,
-                content: `
-                    <h1 style="text-align:center; font-family:serif; font-size:3em; margin-bottom:10px;">The Daily Update</h1>
-                    <p style="text-align:center; font-style:italic;">Issue 1 • ${new Date().toLocaleDateString()}</p>
-                    <hr style="border-top: 2px solid black; margin: 20px 0;" />
-                    <h2>Headline Story</h2>
-                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-                    <br/>
-                    <div style="background:#fff7ed; padding:15px; border-left:4px solid #f97316;">
-                        <h3>Highlights</h3>
-                        <ul><li>Point 1</li><li>Point 2</li></ul>
-                    </div>
-                `
-            },
-            {
-                id: 'report',
-                name: 'Quarterly Report',
-                thumbnailColor: 'bg-rose-50',
-                icon: <BarChart3 size={32} className="text-rose-500 opacity-50" />,
-                content: `
-                    <div style="text-align:center; margin-top:100px; margin-bottom:100px;">
-                        <h1 style="font-size:36px;">Quarterly Report</h1>
-                        <h3>Q${Math.floor((new Date().getMonth() + 3) / 3)} ${new Date().getFullYear()}</h3>
-                        <br/>
-                        <p>Prepared for: [Stakeholder Name]</p>
-                    </div>
-                    <div style="page-break-before:always;"></div>
-                    <h2>1. Introduction</h2>
-                    <p>Overview of performance metrics...</p>
-                    <h2>2. Key Findings</h2>
-                    <p>Analysis of data shows...</p>
-                    <h2>3. Recommendations</h2>
-                    <p>Based on the findings, we suggest...</p>
-                `
-            }
-        ];
-
-        // --- Helper: Retry Logic for API ---
+        // --- Helpers ---
         const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
             for (let i = 0; i < retries; i++) {
                 try {
                     const response = await fetch(url, options);
-                    if (!response.ok) {
-                        if (response.status === 429) throw new Error("Rate limited");
-                        throw new Error(`HTTP Error: ${response.status}`);
-                    }
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
                     return await response.json();
                 } catch (err) {
                     if (i === retries - 1) throw err;
@@ -272,287 +184,188 @@
             }
         };
 
-        // --- Helper: Load Script Dynamically ---
-        const loadScript = (src) => {
-            return new Promise((resolve, reject) => {
-                if (document.querySelector(`script[src="${src}"]`)) {
-                    resolve();
-                    return;
-                }
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        };
+        const loadScript = (src) => new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) return resolve();
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
 
-        // --- Helper: Load Mammoth.js for DOCX Import ---
-        const loadMammoth = () => {
-            return new Promise((resolve, reject) => {
-                if (window.mammoth) {
-                    resolve(window.mammoth);
-                    return;
-                }
-                loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js")
-                    .then(() => resolve(window.mammoth))
-                    .catch(() => reject(new Error("Failed to load DOCX parser")));
-            });
-        };
+        const loadMammoth = () => new Promise((resolve, reject) => {
+            if (window.mammoth) return resolve(window.mammoth);
+            loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js")
+                .then(() => resolve(window.mammoth))
+                .catch(() => reject(new Error("Failed to load DOCX parser")));
+        });
 
-        // --- Helper: Basic RTF Parser ---
         const parseRTF = (rtf) => {
-            let text = rtf.replace(/{\\fonttbl.*?}/g, '');
-            text = text.replace(/{\\colortbl.*?}/g, '');
-            text = text.replace(/{\\stylesheet.*?}/g, '');
-            text = text.replace(/{\\u[0-9]+.*?}/g, '');
-            text = text.replace(/\\par[d]?/g, '<br/>');
-            text = text.replace(/\\b\s/g, '<b>').replace(/\\b0\s?/g, '</b>');
-            text = text.replace(/\\i\s/g, '<i>').replace(/\\i0\s?/g, '</i>');
-            text = text.replace(/\\ul\s/g, '<u>').replace(/\\ulnone\s?/g, '</u>');
-            text = text.replace(/\\[a-z]+\d*[\s]?/g, ''); 
-            text = text.replace(/[{}]/g, '');
-            return text;
+            return rtf.replace(/{\\fonttbl.*?}/g, '').replace(/{\\colortbl.*?}/g, '').replace(/{\\stylesheet.*?}/g, '')
+                      .replace(/{\\u[0-9]+.*?}/g, '').replace(/\\par[d]?/g, '<br/>').replace(/\\b\s/g, '<b>')
+                      .replace(/\\b0\s?/g, '</b>').replace(/\\i\s/g, '<i>').replace(/\\i0\s?/g, '</i>')
+                      .replace(/\\ul\s/g, '<u>').replace(/\\ulnone\s?/g, '</u>').replace(/\\[a-z]+\d*[\s]?/g, '').replace(/[{}]/g, '');
         };
 
-        // ==========================================
-        // SETTINGS MODAL COMPONENT
-        // ==========================================
+        // --- Template Data ---
+        const TEMPLATES = [
+            { id: 'resume', name: 'Resume', thumbnailColor: 'bg-blue-50', icon: <Briefcase size={32} className="text-blue-500 opacity-50" />, content: `<h1 style="text-align: center; color: #2b579a;">[Your Name]</h1><p style="text-align: center;">123 Main St | (555) 123-4567 | email@example.com</p><hr /><h3 style="color: #2b579a;">Professional Summary</h3><p>Experienced professional with a strong background in...</p><h3 style="color: #2b579a;">Experience</h3><p><strong>Job Title</strong> - Company Name (2020 - Present)</p><ul><li>Key achievement one...</li><li>Key achievement two...</li></ul><h3 style="color: #2b579a;">Education</h3><p><strong>Bachelor of Science</strong> - University Name</p>` },
+            { id: 'cover-letter', name: 'Cover Letter', thumbnailColor: 'bg-indigo-50', icon: <User size={32} className="text-indigo-500 opacity-50" />, content: `<p><strong>[Your Name]</strong><br/>[Address]<br/>[Phone]<br/>[Email]</p><br/><p>${new Date().toLocaleDateString()}</p><br/><p><strong>Hiring Manager</strong><br/>[Company Name]<br/>[Company Address]</p><br/><p>Dear Hiring Manager,</p><br/><p>I am writing to express my interest in the [Position Name] position at [Company Name]...</p><br/><p>Sincerely,</p><br/><p>[Your Name]</p>` },
+            { id: 'proposal', name: 'Project Proposal', thumbnailColor: 'bg-purple-50', icon: <FileTextIcon size={32} className="text-purple-500 opacity-50" />, content: `<h1 style="color: #4a148c;">Project Proposal: [Project Title]</h1><p><strong>Prepared by:</strong> [Your Name]</p><br/><h2>1. Executive Summary</h2><p>Brief overview of the project goals and objectives.</p><h2>2. Project Objectives</h2><ul><li>Objective 1</li><li>Objective 2</li></ul><h2>3. Timeline</h2><p>Estimated completion date: [Date]</p>` },
+            { id: 'minutes', name: 'Meeting Minutes', thumbnailColor: 'bg-teal-50', icon: <ClipboardList size={32} className="text-teal-500 opacity-50" />, content: `<h1 style="text-align:center;">Meeting Minutes</h1><p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p><p><strong>Time:</strong> 10:00 AM</p><p><strong>Attendees:</strong> [List Attendees]</p><hr/><h3>Agenda</h3><ol><li>Topic 1</li><li>Topic 2</li></ol><h3>Discussion</h3><p>Notes on discussion points...</p><h3>Action Items</h3><ul><li>[ ] Action 1 (Owner)</li><li>[ ] Action 2 (Owner)</li></ul>` },
+            { id: 'invoice', name: 'Invoice', thumbnailColor: 'bg-emerald-50', icon: <Receipt size={32} className="text-emerald-500 opacity-50" />, content: `<h1 style="text-align:right; color:#059669;">INVOICE</h1><p><strong>Invoice #:</strong> 001</p><p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p><br/><div style="display:flex; justify-content:space-between;"><div><strong>Bill To:</strong><br/>[Client Name]<br/>[Client Address]</div><div><strong>From:</strong><br/>[Your Name]<br/>[Your Address]</div></div><br/><table style="width:100%; border-collapse:collapse; margin-top:20px;" border="1"><tr style="background:#f0fdf4;"><th style="padding:8px; text-align:left;">Description</th><th style="padding:8px; text-align:right;">Amount</th></tr><tr><td style="padding:8px;">Service 1</td><td style="padding:8px; text-align:right;">$0.00</td></tr></table><h3 style="text-align:right; margin-top:20px;">Total: $0.00</h3>` },
+            { id: 'newsletter', name: 'Newsletter', thumbnailColor: 'bg-orange-50', icon: <Newspaper size={32} className="text-orange-500 opacity-50" />, content: `<h1 style="text-align:center; font-family:serif; font-size:3em; margin-bottom:10px;">The Daily Update</h1><p style="text-align:center; font-style:italic;">Issue 1 • ${new Date().toLocaleDateString()}</p><hr style="border-top: 2px solid black; margin: 20px 0;" /><h2>Headline Story</h2><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><br/><div style="background:#fff7ed; padding:15px; border-left:4px solid #f97316;"><h3>Highlights</h3><ul><li>Point 1</li><li>Point 2</li></ul></div>` },
+            { id: 'report', name: 'Quarterly Report', thumbnailColor: 'bg-rose-50', icon: <BarChart3 size={32} className="text-rose-500 opacity-50" />, content: `<div style="text-align:center; margin-top:100px; margin-bottom:100px;"><h1 style="font-size:36px;">Quarterly Report</h1><h3>Q${Math.floor((new Date().getMonth() + 3) / 3)} ${new Date().getFullYear()}</h3><br/><p>Prepared for: [Stakeholder Name]</p></div><div style="page-break-before:always;"></div><h2>1. Introduction</h2><p>Overview of performance metrics...</p><h2>2. Key Findings</h2><p>Analysis of data shows...</p><h2>3. Recommendations</h2><p>Based on the findings, we suggest...</p>` }
+        ];
+
+        // --- AI Components ---
+        const FloatingAIMenu = ({ position, onAction }) => {
+            if (!position) return null;
+            return (
+                <div className="fixed z-[60] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden animate-popIn p-1" style={{ top: position.top - 50, left: position.left }}>
+                    <div className="flex items-center gap-1">
+                        <button onClick={() => onAction('improve')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-gray-700 rounded text-xs font-medium text-gray-700 dark:text-gray-200 transition-colors"><Sparkles size={14} className="text-purple-500" /> Improve</button>
+                        <div className="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+                         <button onClick={() => onAction('tone_professional')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-gray-700 rounded text-xs font-medium text-gray-700 dark:text-gray-200 transition-colors"><Briefcase size={14} className="text-blue-500" /> Professional</button>
+                        <button onClick={() => onAction('tone_friendly')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-gray-700 rounded text-xs font-medium text-gray-700 dark:text-gray-200 transition-colors"><User size={14} className="text-green-500" /> Friendly</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const SlashMenu = ({ position, onSelect }) => {
+            if (!position) return null;
+            const options = [
+                { id: 'ai_draft', label: 'Draft with AI', icon: <Sparkles size={16} className="text-purple-500"/>, desc: 'Generate text from a prompt' },
+                { id: 'ai_continue', label: 'Continue Writing', icon: <PenTool size={16} className="text-blue-500"/>, desc: 'AI writes the next paragraph' },
+                { id: 'h1', label: 'Heading 1', icon: <Type size={16} />, desc: 'Big section heading' },
+                { id: 'h2', label: 'Heading 2', icon: <Type size={14} />, desc: 'Medium section heading' },
+                { id: 'list', label: 'Bullet List', icon: <List size={16} />, desc: 'Create a simple list' },
+                { id: 'table', label: 'Table', icon: <Table size={16} />, desc: 'Insert a 2x2 table' },
+            ];
+            return (
+                <div className="fixed z-[60] bg-white dark:bg-gray-800 w-64 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-popIn" style={{ top: position.top - 8, left: position.left + 12 }}>
+                    <div className="bg-gray-50 dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Basic Blocks</div>
+                    <div className="max-h-64 overflow-y-auto p-1">
+                        {options.map((opt, i) => (
+                            <button key={opt.id} onClick={() => onSelect(opt.id)} className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors ${i<2 ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}>
+                                <div className={`p-1 rounded border ${i<2 ? 'bg-white dark:bg-gray-800 border-purple-200' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'}`}>{opt.icon}</div>
+                                <div><div className={`text-sm font-medium ${i<2 ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-200'}`}>{opt.label}</div><div className="text-[10px] text-gray-400">{opt.desc}</div></div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const InlineAIInput = ({ position, onSubmit, onClose, isLoading }) => {
+            const [value, setValue] = useState('');
+            const inputRef = useRef(null);
+            useEffect(() => { if(inputRef.current) inputRef.current.focus(); }, []);
+            return (
+                <div className="fixed z-[60] w-[500px] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-purple-100 dark:border-purple-900/30 overflow-hidden animate-popIn" style={{ top: position.top, left: Math.max(20, position.left) }}>
+                    <div className="flex items-center gap-3 p-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 p-[2px]">
+                        <div className="flex-1 bg-white dark:bg-gray-900 rounded-lg flex items-center p-1">
+                            <div className="p-2 text-purple-500 animate-pulse"><Sparkles size={20} /></div>
+                            <input ref={inputRef} value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit(value); } if (e.key === 'Escape') onClose(); }} placeholder="Ask AI to write anything..." className="flex-1 bg-transparent border-none focus:outline-none text-sm px-2 py-2 text-gray-800 dark:text-gray-200" disabled={isLoading} />
+                            {isLoading ? <div className="mr-3 w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div> : <div className="flex items-center gap-2 mr-2"><span className="text-[10px] text-gray-400 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded">Esc to close</span><button onClick={() => onSubmit(value)} className="bg-purple-600 text-white p-1 rounded hover:bg-purple-700"><ArrowLeft size={14} className="rotate-180" /></button></div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Standard UI Components ---
+        const ToastContainer = ({ toasts, removeToast }) => <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">{toasts.map(t=><div key={t.id} className="animate-slideIn bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[250px] pointer-events-auto border border-gray-700">{t.type==='success'?<Check size={18} className="text-green-400"/>: t.type === 'info' ? <Info size={18} className="text-blue-400"/> : <AlertCircle size={18} className="text-red-400"/>}<span className="text-sm font-medium">{t.message}</span><button onClick={()=>removeToast(t.id)} className="ml-auto text-gray-400 hover:text-white"><X size={14}/></button></div>)}</div>;
+        
+        const Ruler = ({ isDark }) => {
+            const rulerBg = isDark ? 'bg-gray-800 border-gray-700' : 'bg-[#f8f9fa] border-gray-300';
+            const tickColor = isDark ? 'bg-gray-500' : 'bg-gray-400';
+            const numColor = isDark ? 'text-gray-400' : 'text-gray-500';
+            const maskColor = isDark ? 'bg-gray-900' : 'bg-gray-200';
+            return (
+                <div className={`h-6 border-b flex items-end px-[96px] relative select-none overflow-hidden shrink-0 transition-colors duration-200 ${rulerBg}`}><div className={`w-full h-full relative border-x ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>{[...Array(40)].map((_, i) => (<div key={i} className={`absolute bottom-0 ${tickColor}`} style={{ left: `${(i / 40) * 100}%`, height: i % 5 === 0 ? '6px' : '3px', width: '1px' }}>{i % 5 === 0 && i > 0 && <span className={`absolute -top-3 -left-1 text-[8px] ${numColor}`}>{i/5}</span>}</div>))}<div className={`absolute top-0 bottom-0 left-0 w-0 opacity-50 ${maskColor}`}></div><div className={`absolute top-0 bottom-0 right-0 w-0 opacity-50 ${maskColor}`}></div><div className="absolute top-0 left-0 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#0078d4]"></div><div className="absolute bottom-0 left-0 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#0078d4]"></div></div></div>
+            );
+        };
+
         const SettingsModal = ({ isOpen, onClose, settings, onSave }) => {
             const [formData, setFormData] = useState(settings);
             const [activeTab, setActiveTab] = useState('general');
-
-            useEffect(() => {
-                if (isOpen) setFormData(settings);
-            }, [isOpen, settings]);
-
+            useEffect(() => { if (isOpen) setFormData(settings); }, [isOpen, settings]);
             if (!isOpen) return null;
+            const handleChange = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
+            return (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center animate-fadeIn backdrop-blur-sm">
+                    <div className={`rounded-xl shadow-2xl w-[500px] overflow-hidden transition-colors ${settings.theme === 'dark' ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white'}`}><div className="flex h-full"><div className={`w-1/3 border-r p-4 space-y-1 ${settings.theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}><h3 className="font-bold text-lg mb-4 px-2">Settings</h3>{['general', 'editor', 'appearance'].map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors capitalize ${activeTab === tab ? 'bg-[#0078d4] text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>{tab}</button>))}</div><div className={`w-2/3 p-6 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>{activeTab === 'general' && (<div className="space-y-4"><h4 className="font-semibold border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">Profile</h4><div><label className="block text-xs font-medium mb-1 opacity-70">Initials</label><input type="text" value={formData.initials} onChange={(e) => handleChange('initials', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:border-[#0078d4]' : 'border-gray-300'}`} maxLength={2} /></div><div><label className="block text-xs font-medium mb-1 opacity-70">Full Name</label><input type="text" value={formData.userName} onChange={(e) => handleChange('userName', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:border-[#0078d4]' : 'border-gray-300'}`} /></div><h4 className="font-semibold border-b pb-2 mb-4 pt-4 border-gray-200 dark:border-gray-700">System</h4><div className="flex items-center justify-between"><span className="text-sm">Auto-save</span><button onClick={() => handleChange('autoSave', !formData.autoSave)} className={`w-10 h-5 rounded-full relative transition-colors ${formData.autoSave ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}><div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all ${formData.autoSave ? 'left-6' : 'left-1'}`}></div></button></div></div>)}{activeTab === 'editor' && (<div className="space-y-4"><h4 className="font-semibold border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">Defaults</h4><div><label className="block text-xs font-medium mb-1 opacity-70">Font</label><select value={formData.defaultFont} onChange={(e) => handleChange('defaultFont', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}><option>Calibri</option><option>Arial</option><option>Times New Roman</option><option>Roboto</option></select></div><div><label className="block text-xs font-medium mb-1 opacity-70">Size</label><select value={formData.defaultFontSize} onChange={(e) => handleChange('defaultFontSize', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}><option value="2">10</option><option value="3">12</option><option value="4">14</option></select></div></div>)}{activeTab === 'appearance' && (<div className="space-y-4"><h4 className="font-semibold border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">Theme</h4><div className="grid grid-cols-2 gap-3"><button onClick={() => handleChange('theme', 'light')} className={`p-3 rounded border flex flex-col items-center gap-2 transition-all ${formData.theme === 'light' ? 'border-[#0078d4] bg-blue-50 text-[#0078d4]' : 'border-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'}`}><Sun size={24} /><span className="text-xs font-medium">Light</span></button><button onClick={() => handleChange('theme', 'dark')} className={`p-3 rounded border flex flex-col items-center gap-2 transition-all ${formData.theme === 'dark' ? 'border-[#0078d4] bg-blue-900 text-white' : 'border-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'}`}><Moon size={24} /><span className="text-xs font-medium">Dark</span></button></div></div>)}</div></div><div className={`p-4 border-t flex justify-end gap-2 ${settings.theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}><button onClick={onClose} className={`px-4 py-2 rounded text-sm font-medium transition-colors ${settings.theme === 'dark' ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>Cancel</button><button onClick={() => onSave(formData)} className="px-4 py-2 bg-[#0078d4] hover:bg-[#006bd0] text-white rounded text-sm font-medium transition-colors">Save Changes</button></div></div></div>
+            );
+        };
 
-            const handleChange = (key, value) => {
-                setFormData(prev => ({ ...prev, [key]: value }));
+        const Dashboard = ({ documents, onCreate, onOpen, onDelete, userSettings, onOpenSettings, addToast }) => {
+            const isDark = userSettings.theme === 'dark';
+            const [layout, setLayout] = useState('grid'); 
+            const [deleteId, setDeleteId] = useState(null); // State for delete modal
+
+            const handleDeleteClick = (id, e) => { 
+                e.stopPropagation(); 
+                setDeleteId(id);
+            };
+            
+            const confirmDelete = () => {
+                if (deleteId) {
+                    onDelete(deleteId);
+                    addToast('Document deleted', 'info');
+                    setDeleteId(null);
+                }
             };
 
             return (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center animate-fadeIn">
-                    <div className={`bg-white rounded-xl shadow-2xl w-[500px] overflow-hidden ${settings.theme === 'dark' ? 'bg-gray-800 text-white' : ''}`}>
-                        <div className="flex h-full">
-                            {/* Sidebar */}
-                            <div className={`w-1/3 border-r p-4 space-y-2 ${settings.theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
-                                <h3 className="font-bold text-lg mb-4 px-2">Settings</h3>
-                                <button onClick={() => setActiveTab('general')} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'general' ? 'bg-[#0078d4] text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>General</button>
-                                <button onClick={() => setActiveTab('editor')} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'editor' ? 'bg-[#0078d4] text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Editor</button>
-                                <button onClick={() => setActiveTab('appearance')} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'appearance' ? 'bg-[#0078d4] text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>Appearance</button>
-                            </div>
-
-                            {/* Content */}
-                            <div className={`w-2/3 p-6 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-                                {activeTab === 'general' && (
-                                    <div className="space-y-4">
-                                        <h4 className="font-semibold border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">User Profile</h4>
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1 opacity-70">Initials</label>
-                                            <input type="text" value={formData.initials} onChange={(e) => handleChange('initials', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300'}`} maxLength={2} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1 opacity-70">Full Name</label>
-                                            <input type="text" value={formData.userName} onChange={(e) => handleChange('userName', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300'}`} />
-                                        </div>
-                                        
-                                        <h4 className="font-semibold border-b pb-2 mb-4 pt-4 border-gray-200 dark:border-gray-700">System</h4>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm">Auto-save</span>
-                                            <button onClick={() => handleChange('autoSave', !formData.autoSave)} className={`w-10 h-5 rounded-full relative transition-colors ${formData.autoSave ? 'bg-green-500' : 'bg-gray-300'}`}>
-                                                <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all ${formData.autoSave ? 'left-6' : 'left-1'}`}></div>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeTab === 'editor' && (
-                                    <div className="space-y-4">
-                                        <h4 className="font-semibold border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">Defaults</h4>
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1 opacity-70">Default Font</label>
-                                            <select value={formData.defaultFont} onChange={(e) => handleChange('defaultFont', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300'}`}>
-                                                <option>Calibri</option><option>Arial</option><option>Times New Roman</option><option>Roboto</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1 opacity-70">Default Size</label>
-                                            <select value={formData.defaultFontSize} onChange={(e) => handleChange('defaultFontSize', e.target.value)} className={`w-full p-2 rounded border text-sm ${settings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'border-gray-300'}`}>
-                                                <option value="2">10</option><option value="3">12</option><option value="4">14</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeTab === 'appearance' && (
-                                    <div className="space-y-4">
-                                        <h4 className="font-semibold border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">Theme</h4>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button onClick={() => handleChange('theme', 'light')} className={`p-3 rounded border flex flex-col items-center gap-2 ${formData.theme === 'light' ? 'border-[#0078d4] bg-blue-50 text-[#0078d4]' : 'border-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'}`}>
-                                                <Sun size={24} />
-                                                <span className="text-xs font-medium">Light</span>
-                                            </button>
-                                            <button onClick={() => handleChange('theme', 'dark')} className={`p-3 rounded border flex flex-col items-center gap-2 ${formData.theme === 'dark' ? 'border-[#0078d4] bg-blue-900 text-white' : 'border-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'}`}>
-                                                <Moon size={24} />
-                                                <span className="text-xs font-medium">Dark</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        
-                        {/* Footer */}
-                        <div className={`p-4 border-t flex justify-end gap-2 ${settings.theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                            <button onClick={onClose} className={`px-4 py-2 rounded text-sm font-medium ${settings.theme === 'dark' ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>Cancel</button>
-                            <button onClick={() => onSave(formData)} className="px-4 py-2 bg-[#0078d4] hover:bg-[#006bd0] text-white rounded text-sm font-medium">Save Changes</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // ==========================================
-        // DASHBOARD COMPONENT
-        // ==========================================
-        const Dashboard = ({ documents, onCreate, onOpen, onDelete, userSettings, onOpenSettings }) => {
-            const isDark = userSettings.theme === 'dark';
-            return (
-                <div className={`min-h-screen font-sans overflow-y-auto ${isDark ? 'bg-gray-900 text-gray-200' : 'bg-gray-50 text-[#323130]'}`}>
-                {/* Header */}
-                <div className={`h-16 border-b flex items-center px-4 justify-between sticky top-0 z-10 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                    <div className="flex items-center gap-3">
-                    <div className="p-2 bg-[#0078d4] rounded-lg text-white">
-                        <FileText size={20} />
-                    </div>
-                    <span className="text-xl font-normal opacity-80">DocuGenius</span>
-                    </div>
+                <div className={`h-[100dvh] font-sans overflow-y-auto transition-colors duration-300 ios-scroll ${isDark ? 'bg-gray-900 text-gray-200' : 'bg-gray-50 text-[#323130]'}`}>
+                    <DeleteConfirmModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={confirmDelete} />
                     
-                    <div className="flex-1 max-w-2xl mx-4 hidden md:block">
-                    <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search size={16} className="opacity-50" />
-                        </div>
-                        <input 
-                            type="text" 
-                            className={`block w-full pl-10 pr-3 py-2.5 border-none rounded-lg leading-5 focus:outline-none focus:ring-1 focus:ring-gray-200 focus:shadow-md transition-all ${isDark ? 'bg-gray-700 text-white placeholder-gray-400 focus:bg-gray-600' : 'bg-gray-100 text-gray-900 placeholder-gray-500 focus:bg-white'}`}
-                            placeholder="Search" 
-                        />
+                    {/* Header */}
+                    <div className={`h-16 border-b flex items-center px-6 justify-between sticky top-0 z-20 backdrop-blur-md bg-opacity-90 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                        <div className="flex items-center gap-3"><div className="p-2 bg-gradient-to-tr from-[#0078d4] to-[#00bcf2] rounded-lg text-white shadow-lg shadow-blue-500/30"><FileText size={22} /></div><span className="text-xl font-medium tracking-tight">DocuGenius</span></div>
+                        <div className="flex-1 max-w-2xl mx-8 hidden md:block"><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search size={18} className="opacity-40" /></div><input type="text" className={`block w-full pl-10 pr-4 py-2.5 border-none rounded-xl leading-5 focus:outline-none focus:ring-2 focus:ring-[#0078d4]/50 transition-all ${isDark ? 'bg-gray-700 text-white placeholder-gray-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-900 placeholder-gray-500 hover:bg-white hover:shadow-md'}`} placeholder="Search documents..." /></div></div>
+                        <div className="flex items-center gap-4"><button onClick={onOpenSettings} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`}><Settings size={22} /></button><div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0078d4] to-[#005a9e] text-white flex items-center justify-center font-bold text-sm cursor-default shadow-md border-2 border-white/20" title={userSettings.userName}>{userSettings.initials}</div></div>
                     </div>
+                    {/* Templates */}
+                    <div className={`py-8 border-b ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
+                        <div className="max-w-6xl mx-auto px-6"><div className="flex items-center justify-between mb-4"><span className="text-sm font-medium opacity-70 uppercase tracking-wider">Start a new document</span></div><div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide"><div className="group cursor-pointer shrink-0" onClick={() => onCreate()}><div className={`w-32 h-44 border rounded-lg flex items-center justify-center shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden ${isDark ? 'bg-gray-800 border-gray-600 hover:border-[#0078d4]' : 'bg-white border-gray-200 hover:border-[#0078d4]'}`}><Plus size={40} className="text-[#0078d4] opacity-80 group-hover:scale-110 transition-transform" /></div><p className={`mt-3 text-sm font-medium pl-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>Blank</p></div>{TEMPLATES.map(template => (<div key={template.id} className="group cursor-pointer shrink-0" onClick={() => onCreate(template)}><div className={`w-32 h-44 border rounded-lg flex items-center justify-center shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200 hover:border-[#0078d4]'} ${template.thumbnailColor.replace('bg-', isDark ? 'bg-opacity-10 bg-' : 'bg-')}`}><div className="transform group-hover:scale-110 transition-transform duration-300">{template.icon}</div></div><p className={`mt-3 text-sm font-medium pl-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{template.name}</p></div>))}</div></div>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                        <button onClick={onOpenSettings} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`}>
-                            <Settings size={20} />
-                        </button>
-                        <div className="w-10 h-10 rounded-full bg-[#0078d4] text-white flex items-center justify-center font-bold text-sm cursor-default" title={userSettings.userName}>{userSettings.initials}</div>
+                    {/* Recent Docs */}
+                    <div className="max-w-6xl mx-auto px-6 py-8">
+                        <div className="flex items-center justify-between mb-6"><span className="text-lg font-semibold">Recent documents</span><div className={`flex items-center p-1 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-white border border-gray-200'}`}><button onClick={() => setLayout('grid')} className={`p-2 rounded-md transition-all ${layout === 'grid' ? (isDark ? 'bg-gray-700 shadow' : 'bg-gray-100 shadow') : 'opacity-50'}`}><LayoutGrid size={18}/></button><button onClick={() => setLayout('list')} className={`p-2 rounded-md transition-all ${layout === 'list' ? (isDark ? 'bg-gray-700 shadow' : 'bg-gray-100 shadow') : 'opacity-50'}`}><ListIcon size={18}/></button></div></div>
+                        {documents.length === 0 ? (<div className="text-center py-24 opacity-40"><FileText size={64} className="mx-auto mb-4 text-gray-400" /><p className="text-lg font-medium">No documents yet</p><p className="text-sm">Select a template above to get started</p></div>) : (layout === 'grid' ? (<div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 animate-fadeIn">{documents.map(doc => (<div key={doc.id} className="group cursor-pointer" onClick={() => onOpen(doc.id)}><div className={`aspect-[3/4] border rounded-lg relative shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 p-6 overflow-hidden ${isDark ? 'bg-white border-gray-700' : 'bg-white border-gray-200 hover:border-[#0078d4]'}`}><div className="text-[5px] text-gray-400 leading-relaxed select-none overflow-hidden h-full opacity-70 scale-90 origin-top" dangerouslySetInnerHTML={{__html: doc.content}}></div><div className={`absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t ${isDark ? 'from-white via-white/80' : 'from-white via-white/80'} to-transparent`}></div></div><div className="mt-3 px-1"><h3 className={`text-sm font-medium truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{doc.name || 'Untitled Document'}</h3><div className="flex items-center justify-between mt-1"><div className="flex items-center gap-1.5"><div className="w-5 h-5 bg-[#0078d4] rounded flex items-center justify-center text-white"><FileText size={12}/></div><span className="text-xs opacity-60">{new Date(doc.lastModified).toLocaleDateString()}</span></div><button onClick={(e) => handleDeleteClick(doc.id, e)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={14} /></button></div></div></div>))}</div>) : (<div className={`rounded-xl border overflow-hidden animate-fadeIn ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>{documents.map((doc, i) => (<div key={doc.id} onClick={() => onOpen(doc.id)} className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${isDark ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-blue-50/50 border-gray-100'} ${i !== documents.length - 1 ? 'border-b' : ''}`}><div className="flex items-center gap-4 flex-1"><div className="p-2 bg-blue-100 rounded text-blue-600"><FileText size={20}/></div><div><h3 className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{doc.name || 'Untitled'}</h3><p className="text-xs opacity-50">Last opened by you</p></div></div><div className="text-sm opacity-60 mr-8">{new Date(doc.lastModified).toLocaleDateString()}</div><button onClick={(e) => handleDeleteClick(doc.id, e)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"><Trash2 size={18}/></button></div>))}</div>))}
                     </div>
-                </div>
-
-                {/* Start New Section (Templates) */}
-                <div className={`py-8 border-b ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
-                    <div className="max-w-6xl mx-auto px-4">
-                        <div className="flex items-center justify-between mb-4">
-                        <span className="text-sm font-medium opacity-70">Start a new document</span>
-                        </div>
-                        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                            
-                            {/* Blank Document */}
-                            <div className="group cursor-pointer shrink-0" onClick={() => onCreate()}>
-                                <div className={`w-32 h-40 border rounded-sm flex items-center justify-center shadow-sm hover:shadow-md transition-all relative overflow-hidden ${isDark ? 'bg-gray-700 border-gray-600 hover:border-[#0078d4]' : 'bg-white border-gray-200 hover:border-[#0078d4]'}`}>
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Plus size={40} className="text-[#0078d4] opacity-20 group-hover:opacity-100 transition-opacity" />
-                                    </div>
-                                </div>
-                                <p className={`mt-2 text-xs font-medium group-hover:text-[#0078d4] ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>Blank</p>
-                            </div>
-
-                            {/* Templates */}
-                            {TEMPLATES.map(template => (
-                                <div key={template.id} className="group cursor-pointer shrink-0" onClick={() => onCreate(template)}>
-                                    <div className={`w-32 h-40 border rounded-sm flex items-center justify-center shadow-sm hover:shadow-md transition-all relative overflow-hidden ${isDark ? 'bg-gray-700 border-gray-600 hover:border-[#0078d4]' : 'bg-white border-gray-200 hover:border-[#0078d4]'} ${template.thumbnailColor.replace('bg-', isDark ? 'bg-opacity-10 bg-' : 'bg-')}`}>
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            {template.icon}
-                                        </div>
-                                    </div>
-                                    <p className={`mt-2 text-xs font-medium group-hover:text-[#0078d4] ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{template.name}</p>
-                                </div>
-                            ))}
-
-                        </div>
-                    </div>
-                </div>
-
-                {/* Recent Documents Section */}
-                <div className="max-w-6xl mx-auto px-4 py-8">
-                    <div className={`flex items-center justify-between mb-4 pb-2 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                        <span className="text-sm font-semibold opacity-80">Recent documents</span>
-                        <div className="flex items-center gap-4 opacity-60">
-                        <button className={`p-1 rounded ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}><ListOrdered size={18}/></button>
-                        <button className={`p-1 rounded ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}><ArrowLeft size={18} className="rotate-90"/></button>
-                        </div>
-                    </div>
-
-                    {documents.length === 0 ? (
-                        <div className="text-center py-20 opacity-40">
-                            <FileText size={48} className="mx-auto mb-4 opacity-20" />
-                            <p>No documents yet. Start a new one above!</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {documents.map(doc => (
-                                <div key={doc.id} className="group cursor-pointer" onClick={() => onOpen(doc.id)}>
-                                    <div className={`aspect-[3/4] border rounded-sm relative shadow-sm hover:shadow-md transition-all p-4 overflow-hidden ${isDark ? 'bg-white border-gray-700 hover:border-[#0078d4]' : 'bg-white border-gray-200 hover:border-[#0078d4]'}`}>
-                                        <div className="text-[4px] text-gray-400 leading-relaxed select-none overflow-hidden h-full" dangerouslySetInnerHTML={{__html: doc.content}}></div>
-                                        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white to-transparent"></div>
-                                    </div>
-                                    <div className="mt-3 px-1">
-                                        <h3 className={`text-sm font-medium truncate ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>{doc.name || 'Untitled Document'}</h3>
-                                        <div className="flex items-center justify-between mt-1">
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-4 h-4 bg-[#0078d4] rounded-sm flex items-center justify-center text-white text-[8px]"><FileText size={10}/></div>
-                                                <span className="text-xs opacity-60">{new Date(doc.lastModified).toLocaleDateString()}</span>
-                                            </div>
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); onDelete(doc.id); }}
-                                                className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
                 </div>
             );
         };
 
-        // ==========================================
-        // MAIN APP & EDITOR
-        // ==========================================
+        const DeleteConfirmModal = ({ isOpen, onClose, onConfirm }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center animate-fadeIn backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-96 border border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Document?</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">This action cannot be undone. Are you sure you want to permanently delete this file?</p>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                            <button onClick={onConfirm} className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-500/30">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
-            // --- Global State ---
-            const [view, setView] = useState('dashboard'); // 'dashboard' | 'editor'
+            const [view, setView] = useState('dashboard'); 
             const [documents, setDocuments] = useState([]);
             const [currentDocId, setCurrentDocId] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
-            
-            // --- Settings State ---
-            const [userSettings, setUserSettings] = useState({
-                userName: 'Guest',
-                initials: 'SP',
-                defaultFont: 'Calibri',
-                defaultFontSize: '3', // '3' maps to 12pt in execCommand
-                autoSave: true,
-                theme: 'light'
-            });
+            const [toasts, setToasts] = useState([]);
+            const [userSettings, setUserSettings] = useState({ userName: 'Guest', initials: 'SP', defaultFont: 'Calibri', defaultFontSize: '12', autoSave: true, theme: 'light' });
 
-            // --- Editor State ---
+            // Editor States
             const [activeTab, setActiveTab] = useState('Home');
             const [fileName, setFileName] = useState('Untitled Document');
             const [language, setLanguage] = useState('English (U.S.)');
@@ -560,75 +373,57 @@
             const [aiPrompt, setAiPrompt] = useState('');
             const [aiLoading, setAiLoading] = useState(false);
             const [aiResponse, setAiResponse] = useState(null);
-            const [selectionRange, setSelectionRange] = useState(null);
             const [saveStatus, setSaveStatus] = useState('Saved');
-            const [selectedText, setSelectedText] = useState('');
             const [zoomLevel, setZoomLevel] = useState(100);
             const [totalWords, setTotalWords] = useState(0);
             const [isRibbonOpen, setIsRibbonOpen] = useState(true);
-            const [searchTerm, setSearchTerm] = useState('');
-            
-            // Layout States
-            const [orientation, setOrientation] = useState('portrait');
-            const [margins, setMargins] = useState('normal');
-            const [viewMode, setViewMode] = useState('print');
             const [pageColor, setPageColor] = useState('#ffffff');
             const [watermark, setWatermark] = useState(null);
+            const [margins, setMargins] = useState('normal');
+            const [orientation, setOrientation] = useState('portrait');
+            const [viewMode, setViewMode] = useState('print');
+            const [showFind, setShowFind] = useState(false);
+            const [findTerm, setFindTerm] = useState('');
+            const [currentFontSize, setCurrentFontSize] = useState('12'); 
+
+            // AI Tight Integration States
+            const [floatingMenuPos, setFloatingMenuPos] = useState(null);
+            const [slashMenuPos, setSlashMenuPos] = useState(null);
+            const [inlineAIPos, setInlineAIPos] = useState(null);
+            const [selectedText, setSelectedText] = useState('');
 
             const editorRef = useRef(null);
             const fileInputRef = useRef(null);
             const imageInputRef = useRef(null);
 
-            // --- Initialization ---
+            // Toast System
+            const addToast = (message, type = 'success') => {
+                const id = Date.now();
+                setToasts(prev => [...prev, { id, message, type }]);
+                setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+            };
+            const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+            // Initialization
             useEffect(() => {
-                // Load Documents
                 const rawDocs = localStorage.getItem('docuGeniusDocs');
-                const legacyData = localStorage.getItem('docuGeniusData');
-                
-                // Load Settings
                 const savedSettings = localStorage.getItem('docuGeniusSettings');
                 if (savedSettings) setUserSettings(JSON.parse(savedSettings));
-
-                let docs = [];
-                if (rawDocs) {
-                    try { docs = JSON.parse(rawDocs); } catch (e) {}
-                } 
-                
-                // Migration
-                if (legacyData && docs.length === 0) {
-                    try {
-                        const old = JSON.parse(legacyData);
-                        docs.push({
-                            id: crypto.randomUUID(),
-                            name: old.name || 'Migrated Document',
-                            content: old.content,
-                            lastModified: old.lastModified || new Date().toISOString()
-                        });
-                        localStorage.setItem('docuGeniusDocs', JSON.stringify(docs));
-                        localStorage.removeItem('docuGeniusData');
-                    } catch (e) {}
-                }
-                setDocuments(docs.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified)));
+                if (rawDocs) try { setDocuments(JSON.parse(rawDocs).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified))); } catch (e) {}
             }, []);
 
-            // Apply Theme Class
             useEffect(() => {
-                if (userSettings.theme === 'dark') {
-                    document.body.classList.add('dark');
-                    document.body.style.backgroundColor = '#111827'; // Tailwind gray-900
-                } else {
-                    document.body.classList.remove('dark');
-                    document.body.style.backgroundColor = '#f0f0f0';
-                }
+                if (userSettings.theme === 'dark') { document.body.classList.add('dark'); document.body.style.backgroundColor = '#111827'; } 
+                else { document.body.classList.remove('dark'); document.body.style.backgroundColor = '#f0f0f0'; }
             }, [userSettings.theme]);
 
             const saveSettings = (newSettings) => {
                 setUserSettings(newSettings);
                 localStorage.setItem('docuGeniusSettings', JSON.stringify(newSettings));
                 setShowSettings(false);
+                addToast('Settings saved');
             };
 
-            // --- Dashboard Actions ---
             const createNewDocument = (template = null) => {
                 const newDoc = {
                     id: crypto.randomUUID(),
@@ -639,7 +434,13 @@
                 const updatedDocs = [newDoc, ...documents];
                 setDocuments(updatedDocs);
                 localStorage.setItem('docuGeniusDocs', JSON.stringify(updatedDocs));
-                openDocument(newDoc.id);
+                
+                // Directly open the new document
+                setCurrentDocId(newDoc.id);
+                setFileName(newDoc.name);
+                setPageColor('#ffffff'); setWatermark(null); setOrientation('portrait'); setMargins('normal');
+                setView('editor');
+                addToast('Document created');
             };
 
             const openDocument = (id) => {
@@ -647,20 +448,15 @@
                 if (doc) {
                     setCurrentDocId(id);
                     setFileName(doc.name);
-                    setPageColor('#ffffff');
-                    setWatermark(null);
-                    setOrientation('portrait');
-                    setMargins('normal');
+                    setPageColor('#ffffff'); setWatermark(null); setOrientation('portrait'); setMargins('normal');
                     setView('editor');
                 }
             };
 
             const deleteDocument = (id) => {
-                if (window.confirm("Are you sure you want to delete this document?")) {
-                    const updated = documents.filter(d => d.id !== id);
-                    setDocuments(updated);
-                    localStorage.setItem('docuGeniusDocs', JSON.stringify(updated));
-                }
+                const updated = documents.filter(d => d.id !== id);
+                setDocuments(updated);
+                localStorage.setItem('docuGeniusDocs', JSON.stringify(updated));
             };
 
             const goToDashboard = () => {
@@ -670,32 +466,157 @@
                 if(rawDocs) setDocuments(JSON.parse(rawDocs).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified)));
             };
 
-            // --- Editor Logic ---
+            // Editor Logic
             useEffect(() => {
                 if (view === 'editor' && currentDocId && editorRef.current) {
                     const doc = documents.find(d => d.id === currentDocId);
                     if (doc) {
                         editorRef.current.innerHTML = doc.content;
                         updateWordCount();
-                        // Apply default font if doc is empty/new
-                        if (!doc.content || doc.content === '<p>Start writing here...</p>') {
+                        if (!doc.content || doc.content.includes('Start writing here')) {
                             formatDoc('fontName', userSettings.defaultFont);
-                            formatDoc('fontSize', userSettings.defaultFontSize);
+                            applyFontSize(userSettings.defaultFontSize); 
                         }
                     }
                 }
             }, [view, currentDocId]);
 
+            // --- TIGHT AI INTEGRATION LOGIC (Selection & Slash) ---
+             useEffect(() => {
+                if (view !== 'editor') return;
+
+                const handleSelection = () => {
+                    const selection = window.getSelection();
+                    if (!selection.rangeCount) return;
+                    
+                    const range = selection.getRangeAt(0);
+                    const text = selection.toString().trim();
+                    setSelectedText(text);
+
+                    if (text.length > 0 && !slashMenuPos && !inlineAIPos && editorRef.current.contains(selection.anchorNode)) {
+                        const rect = range.getBoundingClientRect();
+                        if (rect.top > 0) { 
+                             setFloatingMenuPos({ top: rect.top, left: rect.left + (rect.width / 2) - 100 }); 
+                        }
+                    } else {
+                        setFloatingMenuPos(null);
+                    }
+                };
+
+                const handleInput = (e) => {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        const rect = range.getBoundingClientRect();
+                        if (e.data === '/' && editorRef.current.contains(selection.anchorNode)) {
+                             // Position based on top/right for side alignment
+                             setSlashMenuPos({ top: rect.top, left: rect.right });
+                             setFloatingMenuPos(null); 
+                        } else {
+                            if (slashMenuPos) setSlashMenuPos(null);
+                        }
+                    }
+                    handleEditorChange(); // Ensure regular typing triggers save
+                };
+
+                document.addEventListener('selectionchange', handleSelection);
+                const editor = editorRef.current;
+                if(editor) editor.addEventListener('input', handleInput);
+
+                return () => {
+                    document.removeEventListener('selectionchange', handleSelection);
+                    if(editor) editor.removeEventListener('input', handleInput);
+                };
+            }, [view, slashMenuPos, inlineAIPos]);
+
+            const runAIAction = async (type, prompt = null) => {
+                setAiLoading(true);
+                try {
+                    let finalPrompt = "";
+                    // New Document-level actions
+                    if (type === 'summarize_doc') {
+                        const docText = editorRef.current.innerText;
+                        finalPrompt = `Summarize the following document concisely:\n\n${docText}`;
+                        // For sidebar response, we handle differently below, but for now let's reuse this flow or create a separate one.
+                        // Actually, let's branch logic here.
+                         const data = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: finalPrompt }] }] }) });
+                         const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                         setAiResponse(resultText);
+                         setShowAIPanel(true); // Open sidebar to show summary
+                         setAiLoading(false);
+                         return;
+                    }
+                    if (type === 'critique_doc') {
+                        const docText = editorRef.current.innerText;
+                        finalPrompt = `Critique the writing style and clarity of the following text. Provide 3 bullet points for improvement:\n\n${docText}`;
+                         const data = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: finalPrompt }] }] }) });
+                         const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                         setAiResponse(resultText);
+                         setShowAIPanel(true);
+                         setAiLoading(false);
+                         return;
+                    }
+
+                    // Inline / Selection Actions
+                    if (type === 'improve') finalPrompt = `Improve the writing of this text: "${selectedText}"`;
+                    else if (type === 'shorten') finalPrompt = `Shorten this text concisely: "${selectedText}"`;
+                    else if (type === 'fix') finalPrompt = `Fix grammar and spelling: "${selectedText}"`;
+                    else if (type === 'tone_professional') finalPrompt = `Rewrite this text to sound professional and corporate: "${selectedText}"`;
+                    else if (type === 'tone_friendly') finalPrompt = `Rewrite this text to sound friendly and approachable: "${selectedText}"`;
+                    else if (type === 'continue') {
+                        // Contextual continue
+                        const selection = window.getSelection();
+                        let context = "";
+                        if (selection.rangeCount > 0) {
+                            // Get text before cursor approx 1000 chars
+                            const range = selection.getRangeAt(0);
+                            const preCaretRange = range.cloneRange();
+                            preCaretRange.selectNodeContents(editorRef.current);
+                            preCaretRange.setEnd(range.endContainer, range.endOffset);
+                            context = preCaretRange.toString().slice(-1000);
+                        }
+                        finalPrompt = `Continue writing the following text logically and coherently (write 1 paragraph):\n\n"${context}"`;
+                    }
+                    else if (type === 'generate') finalPrompt = `Write content based on this instruction: "${prompt}". Return html paragraphs.`;
+
+                    const data = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: finalPrompt }] }] }) });
+                    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                    
+                    if (editorRef.current) {
+                        editorRef.current.focus();
+                        if (type === 'generate' || type === 'continue') document.execCommand('insertHTML', false, resultText);
+                        else document.execCommand('insertText', false, resultText);
+                    }
+                } catch (e) { addToast("AI Error", 'error'); } 
+                finally {
+                    setAiLoading(false); setFloatingMenuPos(null); setInlineAIPos(null); setSlashMenuPos(null); handleEditorChange();
+                }
+            };
+
+            const handleSlashSelect = (id) => {
+                setSlashMenuPos(null);
+                document.execCommand('delete'); // Remove the '/'
+                if (id === 'ai_draft') {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const rect = selection.getRangeAt(0).getBoundingClientRect();
+                        setInlineAIPos({ top: rect.bottom + 10, left: rect.left });
+                    }
+                } 
+                else if (id === 'ai_continue') runAIAction('continue');
+                else if (id === 'h1') document.execCommand('formatBlock', false, 'H1');
+                else if (id === 'h2') document.execCommand('formatBlock', false, 'H2');
+                else if (id === 'list') document.execCommand('insertUnorderedList');
+                else if (id === 'table') document.execCommand('insertHTML', false, '<table border="1" style="width:100%"><tr><td>.</td><td>.</td></tr></table>');
+                handleEditorChange();
+            };
+
+            // --- Saving Logic ---
             const saveDocumentImmediate = useCallback(() => {
                 if (!editorRef.current || !currentDocId) return;
                 const content = editorRef.current.innerHTML;
                 setDocuments(prevDocs => {
-                    const updatedDocs = prevDocs.map(d => {
-                        if (d.id === currentDocId) {
-                            return { ...d, content, name: fileName, lastModified: new Date().toISOString() };
-                        }
-                        return d;
-                    });
+                    const updatedDocs = prevDocs.map(d => d.id === currentDocId ? { ...d, content, name: fileName, lastModified: new Date().toISOString() } : d);
                     localStorage.setItem('docuGeniusDocs', JSON.stringify(updatedDocs));
                     return updatedDocs;
                 });
@@ -704,27 +625,13 @@
 
             useEffect(() => {
                 if (view !== 'editor' || !userSettings.autoSave) return;
-                const interval = setInterval(() => { saveDocumentImmediate(); }, 3000); 
-                const handleKeyDown = (e) => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                        e.preventDefault();
-                        saveDocumentImmediate();
-                    }
-                };
+                const interval = setInterval(saveDocumentImmediate, 3000);
+                const handleKeyDown = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveDocumentImmediate(); addToast('Saved successfully'); }};
                 window.addEventListener('keydown', handleKeyDown);
-                return () => {
-                    clearInterval(interval);
-                    window.removeEventListener('keydown', handleKeyDown);
-                };
+                return () => { clearInterval(interval); window.removeEventListener('keydown', handleKeyDown); };
             }, [view, saveDocumentImmediate, userSettings.autoSave]);
 
-            const handleEditorChange = () => {
-                setSaveStatus('Saving...');
-                updateWordCount();
-            };
-
-            // ... (Keep all helper functions: updateWordCount, formatDoc, handlePaste, handleImageUpload, handleOpenFile, etc.)
-            // For brevity, standard functions are collapsed in this block, ensure they are present in final code
+            const handleEditorChange = () => { setSaveStatus('Saving...'); updateWordCount(); };
             const updateWordCount = () => { if (editorRef.current) setTotalWords(editorRef.current.innerText.trim().split(/\s+/).filter(w => w.length > 0).length); };
             const formatDoc = (cmd, value) => { document.execCommand(cmd, false, value); if(editorRef.current) editorRef.current.focus(); handleEditorChange(); };
             const handlePaste = (e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); handleEditorChange(); };
@@ -735,139 +642,107 @@
             const toggleWatermark = (text) => setWatermark(c => c === text ? null : text);
             const insertMergeField = (f) => { document.execCommand('insertText', false, `{{${f}}}`); handleEditorChange(); };
             const handlePrint = () => window.print();
-            
-            // File Export Logic (Restored)
+            const handleFind = (term) => { setFindTerm(term); if (term) window.find(term); };
+
             const handleExport = async (format) => {
                 if (!editorRef.current) return;
-                const contentText = editorRef.current.innerText;
-                const contentHTML = editorRef.current.innerHTML;
-                const safeFileName = fileName || 'Document';
+                const contentText = editorRef.current.innerText; const contentHTML = editorRef.current.innerHTML; const safeFileName = fileName || 'Document';
                 const downloadBlob = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); };
-                
                 if(format === 'txt') downloadBlob(new Blob([contentText], {type:'text/plain'}), `${safeFileName}.txt`);
-                else if(format === 'docx') {
-                    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><title>${safeFileName}</title></head><body>${contentHTML}</body></html>`;
-                    downloadBlob(new Blob(['\ufeff', html], {type:'application/msword'}), `${safeFileName}.doc`);
-                } else if(format === 'pdf') {
-                    try {
-                        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
-                        window.html2pdf().set({ margin: 1, filename: `${safeFileName}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' } }).from(editorRef.current).save();
-                    } catch(e) { alert("PDF Error"); }
-                }
+                else if(format === 'docx') { const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><title>${safeFileName}</title></head><body>${contentHTML}</body></html>`; downloadBlob(new Blob(['\ufeff', html], {type:'application/msword'}), `${safeFileName}.doc`); } 
+                else if(format === 'pdf') { try { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"); window.html2pdf().set({ margin: 1, filename: `${safeFileName}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' } }).from(editorRef.current).save(); } catch(e) { addToast("PDF Error", 'error'); } }
+                addToast(`Exported as ${format.toUpperCase()}`);
             };
 
-            // File Open Logic (Restored)
             const handleOpenFile = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
+                const file = e.target.files[0]; if (!file) return;
                 const ext = file.name.split('.').pop().toLowerCase();
-                if (ext === 'docx') {
-                    try {
-                        const mammoth = await loadMammoth();
-                        const reader = new FileReader();
-                        reader.onload = async (ev) => {
-                            const result = await mammoth.convertToHtml({ arrayBuffer: ev.target.result });
-                            if(editorRef.current) { editorRef.current.innerHTML = result.value; setFileName(file.name.replace(/\.[^/.]+$/, "")); updateWordCount(); handleEditorChange(); }
-                        };
-                        reader.readAsArrayBuffer(file);
-                    } catch(err) { alert("Error reading DOCX"); }
-                } else if (['txt', 'html'].includes(ext)) {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => { if(editorRef.current) { editorRef.current.innerHTML = ev.target.result; setFileName(file.name.replace(/\.[^/.]+$/, "")); updateWordCount(); handleEditorChange(); } };
-                    reader.readAsText(file);
-                }
+                if (ext === 'docx') { try { const mammoth = await loadMammoth(); const reader = new FileReader(); reader.onload = async (ev) => { const result = await mammoth.convertToHtml({ arrayBuffer: ev.target.result }); if(editorRef.current) { editorRef.current.innerHTML = result.value; setFileName(file.name.replace(/\.[^/.]+$/, "")); updateWordCount(); handleEditorChange(); } }; reader.readAsArrayBuffer(file); } catch(err) { addToast("Error reading DOCX", 'error'); } }
+                else if (['txt', 'html'].includes(ext)) { const reader = new FileReader(); reader.onload = (ev) => { if(editorRef.current) { editorRef.current.innerHTML = ev.target.result; setFileName(file.name.replace(/\.[^/.]+$/, "")); updateWordCount(); handleEditorChange(); } }; reader.readAsText(file); }
             };
 
-            // AI Logic (Restored)
             const callGemini = async (prompt, contextText = "") => {
-                setAiLoading(true);
-                setAiResponse(null);
+                setAiLoading(true); setAiResponse(null);
                 try {
                     const fullPrompt = contextText ? `Context: "${contextText}"\n\nTask: ${prompt}\n\nTarget Language: ${language}\nProvide only the result.` : `${prompt}\n\nTarget Language: ${language}\nProvide only the result.`;
                     const data = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
                     setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.");
-                } catch (error) { setAiResponse("Connection Error"); } finally { setAiLoading(false); }
+                } catch (error) { setAiResponse("Connection Error"); addToast("AI Connection Failed", 'error'); } finally { setAiLoading(false); }
             };
-            const insertAIContent = () => {
-                if(!aiResponse || !editorRef.current) return;
-                editorRef.current.focus();
-                document.execCommand('insertText', false, aiResponse);
-                setAiResponse(null); setAiPrompt(''); setShowAIPanel(false); handleEditorChange();
-            };
+            const insertAIContent = () => { if(!aiResponse || !editorRef.current) return; editorRef.current.focus(); document.execCommand('insertText', false, aiResponse); setAiResponse(null); setAiPrompt(''); setShowAIPanel(false); handleEditorChange(); };
 
             const getPageStyle = () => {
-                const base = {
-                    fontFamily: 'Calibri, sans-serif', fontSize: '12pt', lineHeight: '1.5',
-                    transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center',
-                    backgroundColor: pageColor, marginBottom: '2rem', position: 'relative', minHeight: '1056px',
-                    boxShadow: userSettings.theme === 'dark' ? 'none' : '0 8px 24px rgba(0,0,0,0.12)'
-                };
+                const base = { fontFamily: 'Calibri, sans-serif', fontSize: '12pt', lineHeight: '1.5', transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center', backgroundColor: pageColor, marginBottom: '2rem', position: 'relative', minHeight: '1056px', boxShadow: userSettings.theme === 'dark' ? 'none' : '0 8px 24px rgba(0,0,0,0.12)' };
                 if (orientation === 'landscape') { base.width = '1056px'; base.minHeight = '816px'; } else { base.width = '816px'; base.minHeight = '1056px'; }
                 if (viewMode === 'web') { base.width = '100%'; base.minHeight = '100vh'; base.marginBottom = '0'; base.transform = 'none'; base.boxShadow = 'none'; }
-                base.padding = margins === 'wide' ? '144px' : margins === 'narrow' ? '48px' : '96px';
-                return base;
+                base.padding = margins === 'wide' ? '144px' : margins === 'narrow' ? '48px' : '96px'; return base;
+            };
+
+            const applyFontSize = (sizeVal) => {
+                const size = parseInt(sizeVal); if (isNaN(size)) return;
+                const standardMap = { 8:1, 10:2, 12:3, 14:4, 18:5, 24:6, 36:7 };
+                if (standardMap[size]) document.execCommand('fontSize', false, standardMap[size]);
+                else { document.execCommand('fontSize', false, '7'); const fontElements = editorRef.current.getElementsByTagName("font"); for (let font of fontElements) { if (font.size === "7") { font.removeAttribute("size"); font.style.fontSize = size + "pt"; }}}
+                setCurrentFontSize(sizeVal); handleEditorChange();
             };
 
             const renderToolbar = () => {
-                // Simplified toolbar rendering for brevity, full implementation matches previous context
-                // Just showing structure
                 switch (activeTab) {
-                    case 'File': return (
-                         <div className="flex items-center space-x-6 px-6 h-24 animate-fadeIn overflow-x-auto">
-                            <div className="flex flex-col space-y-2 border-r border-gray-200 dark:border-gray-600 pr-6 h-20 justify-center min-w-fit">
-                                <div className="flex space-x-3">
-                                    <ToolbarAction icon={FilePlus} label="New" onClick={createNewDocument} />
-                                    <ToolbarAction icon={FolderOpen} label="Open" onClick={() => fileInputRef.current.click()} />
-                                </div>
-                                <span className="text-[10px] font-medium text-center uppercase tracking-wider opacity-60">Document</span>
-                            </div>
-                             <div className="flex flex-col space-y-2 border-r border-gray-200 dark:border-gray-600 pr-6 h-20 justify-center min-w-fit">
-                                <div className="flex space-x-3">
-                                    <button onClick={() => handleExport('docx')} className="flex flex-col items-center justify-center px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 min-w-[70px] transition-colors group">
-                                        <FileTextIcon size={24} className="text-blue-600" /><span className="text-[11px] font-medium mt-1 group-hover:text-blue-600">Word</span>
-                                    </button>
-                                    <button onClick={() => handleExport('pdf')} className="flex flex-col items-center justify-center px-4 py-2 rounded hover:bg-red-50 dark:hover:bg-gray-700 min-w-[70px] transition-colors group">
-                                        <FileType size={24} className="text-red-600" /><span className="text-[11px] font-medium mt-1 group-hover:text-red-600">PDF</span>
-                                    </button>
-                                </div>
-                                <span className="text-[10px] font-medium text-center uppercase tracking-wider opacity-60">Export</span>
-                            </div>
-                            <ToolbarAction icon={Printer} label="Print" onClick={handlePrint} />
-                        </div>
-                    );
-                    case 'Insert': return (
-                        <div className="flex items-center space-x-4 px-6 h-24 animate-fadeIn overflow-x-auto">
-                            <div className="flex space-x-2 border-r border-gray-200 dark:border-gray-600 pr-6 h-16 items-center min-w-fit">
-                                <ToolbarAction icon={ImageIcon} label="Picture" onClick={() => imageInputRef.current.click()} />
-                                <ToolbarAction icon={Table} label="Table" onClick={insertTable} />
-                            </div>
-                            <div className="flex space-x-2 border-r border-gray-200 dark:border-gray-600 pr-6 h-16 items-center min-w-fit">
-                                <ToolbarAction icon={LinkIcon} label="Link" onClick={insertLink} />
-                                <ToolbarAction icon={MinusSquare} label="Line" onClick={() => document.execCommand('insertHorizontalRule')} />
-                            </div>
-                            <ToolbarAction icon={Calendar} label="Date" onClick={insertDate} />
-                        </div>
-                    );
-                    // ... Other tabs (Design, Layout, etc.) would be here, similar pattern
+                    case 'File': return (<div className="flex items-center space-x-6 px-6 h-20 animate-fadeIn overflow-x-auto"><div className="flex space-x-3 border-r pr-6 border-gray-200 dark:border-gray-600"><ToolbarAction icon={FilePlus} label="New" onClick={createNewDocument} /><ToolbarAction icon={FolderOpen} label="Open" onClick={() => fileInputRef.current.click()} /></div><div className="flex space-x-3 border-r pr-6 border-gray-200 dark:border-gray-600"><button onClick={() => handleExport('docx')} className="flex flex-col items-center justify-center px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 min-w-[70px] transition-colors group"><FileTextIcon size={24} className="text-blue-600" /><span className="text-[10px] mt-1 group-hover:text-blue-600">Word</span></button><button onClick={() => handleExport('pdf')} className="flex flex-col items-center justify-center px-4 py-2 rounded hover:bg-red-50 dark:hover:bg-gray-700 min-w-[70px] transition-colors group"><FileType size={24} className="text-red-600" /><span className="text-[10px] mt-1 group-hover:text-red-600">PDF</span></button></div><ToolbarAction icon={Printer} label="Print" onClick={handlePrint} /></div>);
+                    case 'Insert': return (<div className="flex items-center space-x-6 px-6 h-20 animate-fadeIn"><ToolbarAction icon={ImageIcon} label="Picture" onClick={() => imageInputRef.current.click()} /><ToolbarAction icon={Table} label="Table" onClick={insertTable} /><ToolbarAction icon={LinkIcon} label="Link" onClick={insertLink} /><ToolbarAction icon={MinusSquare} label="Line" onClick={() => document.execCommand('insertHorizontalRule')} /><ToolbarAction icon={Calendar} label="Date" onClick={insertDate} /></div>);
+                    case 'Design': return (<div className="flex items-center space-x-6 px-6 h-20 animate-fadeIn"><div className="flex items-center gap-4"><label className="flex flex-col items-center cursor-pointer"><Palette size={24} className="text-[#0078d4]"/><span className="text-[10px] mt-1">Page Color</span><input type="color" className="opacity-0 absolute w-8 h-8" onChange={(e) => {setPageColor(e.target.value); handleEditorChange();}}/></label><div className="relative group"><button className="flex flex-col items-center"><Stamp size={24} className="text-[#0078d4]"/><span className="text-[10px] mt-1">Watermark</span></button><div className="hidden group-hover:block absolute top-full bg-white shadow-lg border p-2 rounded z-50 w-32"><button className="block w-full text-left p-1 text-xs hover:bg-gray-100" onClick={() => toggleWatermark('CONFIDENTIAL')}>Confidential</button><button className="block w-full text-left p-1 text-xs hover:bg-gray-100" onClick={() => toggleWatermark('DRAFT')}>Draft</button><button className="block w-full text-left p-1 text-xs text-red-500 hover:bg-red-50" onClick={() => setWatermark(null)}>Remove</button></div></div></div></div>);
+                    case 'Layout': return (<div className="flex items-center space-x-6 px-6 h-20 animate-fadeIn"><div className="flex gap-2 border-r pr-6 border-gray-200 dark:border-gray-600"><button onClick={() => setMargins('narrow')} className="px-3 py-1 border rounded text-xs hover:bg-gray-50">Narrow</button><button onClick={() => setMargins('normal')} className="px-3 py-1 border rounded text-xs hover:bg-gray-50 bg-gray-100">Normal</button><button onClick={() => setMargins('wide')} className="px-3 py-1 border rounded text-xs hover:bg-gray-50">Wide</button></div><div className="flex gap-2"><button onClick={() => setOrientation('portrait')} className="px-3 py-1 border rounded text-xs flex items-center gap-1"><div className="w-2 h-3 border border-current"></div> Portrait</button><button onClick={() => setOrientation('landscape')} className="px-3 py-1 border rounded text-xs flex items-center gap-1"><div className="w-3 h-2 border border-current"></div> Landscape</button></div></div>);
                     case 'Home': default: return (
-                        <div className="flex items-center h-24 px-6 space-x-6 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 pb-2 sm:pb-0 animate-fadeIn">
+                        <div className="flex items-center h-20 px-6 space-x-4 animate-fadeIn">
                             <div className="flex flex-col items-center justify-center px-2 space-y-2 border-r border-gray-200 dark:border-gray-600 pr-6 shrink-0 h-20">
                                 <button onClick={handlePaste} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors group flex flex-col items-center">
                                 <FileTextIcon size={26} className="text-[#0078d4]" /><span className="text-[11px] font-medium mt-1">Paste</span>
                                 </button>
                             </div>
                             <div className="flex flex-col space-y-2 border-r border-gray-200 dark:border-gray-600 pr-6 shrink-0 h-20 justify-center min-w-fit">
-                                <div className="flex space-x-3">
-                                    <select onChange={(e) => formatDoc('fontName', e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-sm text-xs h-8 w-40 px-2 focus:outline-none dark:bg-gray-700"><option>Calibri</option><option>Arial</option></select>
-                                    <select onChange={(e) => formatDoc('fontSize', e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-sm text-xs h-8 w-16 px-2 focus:outline-none dark:bg-gray-700"><option value="3">12</option><option value="5">18</option></select>
+                                <div className="flex space-x-3 items-center">
+                                    <select onChange={(e) => formatDoc('fontName', e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-sm text-xs h-8 w-40 px-2 focus:outline-none dark:bg-gray-700">
+                                        <option value="Andale Mono">Andale Mono</option><option value="Arial">Arial</option><option value="Arial Black">Arial Black</option><option value="Arial Narrow">Arial Narrow</option><option value="Avant Garde">Avant Garde</option><option value="Baskerville">Baskerville</option><option value="Big Caslon">Big Caslon</option><option value="Bodoni MT">Bodoni MT</option><option value="Book Antiqua">Book Antiqua</option><option value="Bookman">Bookman</option><option value="Brush Script MT">Brush Script MT</option><option value="Calibri">Calibri</option><option value="Calisto MT">Calisto MT</option><option value="Cambria">Cambria</option><option value="Candara">Candara</option><option value="Century Gothic">Century Gothic</option><option value="Comic Sans MS">Comic Sans MS</option><option value="Consolas">Consolas</option><option value="Constantia">Constantia</option><option value="Copperplate">Copperplate</option><option value="Corbel">Corbel</option><option value="Courier">Courier</option><option value="Courier New">Courier New</option><option value="Didot">Didot</option><option value="Franklin Gothic Medium">Franklin Gothic</option><option value="Futura">Futura</option><option value="Garamond">Garamond</option><option value="Geneva">Geneva</option><option value="Georgia">Georgia</option><option value="Gill Sans">Gill Sans</option><option value="Goudy Old Style">Goudy Old Style</option><option value="Helvetica">Helvetica</option><option value="Impact">Impact</option><option value="Lucida Bright">Lucida Bright</option><option value="Lucida Console">Lucida Console</option><option value="Lucida Grande">Lucida Grande</option><option value="Lucida Sans Unicode">Lucida Sans</option><option value="Monaco">Monaco</option><option value="Optima">Optima</option><option value="Palatino">Palatino</option><option value="Palatino Linotype">Palatino Linotype</option><option value="Papyrus">Papyrus</option><option value="Perpetua">Perpetua</option><option value="Roboto">Roboto</option><option value="Rockwell">Rockwell</option><option value="Segoe UI">Segoe UI</option><option value="Tahoma">Tahoma</option><option value="Times">Times</option><option value="Times New Roman">Times New Roman</option><option value="Trebuchet MS">Trebuchet MS</option><option value="Verdana">Verdana</option>
+                                    </select>
+                                    
+                                    {/* Font Size Input Combo */}
+                                    <div className="relative w-16 h-8">
+                                        <input 
+                                            type="number" 
+                                            value={currentFontSize}
+                                            onChange={(e) => { setCurrentFontSize(e.target.value); applyFontSize(e.target.value); }}
+                                            className="w-full h-full border border-gray-300 dark:border-gray-600 rounded-sm text-xs px-2 focus:outline-none dark:bg-gray-700"
+                                        />
+                                        <div className="absolute right-0 top-0 h-full flex flex-col border-l border-gray-300 dark:border-gray-600">
+                                            <button className="h-1/2 px-1 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={() => { const n = parseInt(currentFontSize)+1; setCurrentFontSize(n); applyFontSize(n); }}><ChevronUp size={8}/></button>
+                                            <button className="h-1/2 px-1 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={() => { const n = parseInt(currentFontSize)-1; setCurrentFontSize(n); applyFontSize(n); }}><ChevronDown size={8}/></button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex space-x-1">
+                                        <button onClick={() => { const n = parseInt(currentFontSize)+2; setCurrentFontSize(n); applyFontSize(n); }} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><Plus size={14}/></button>
+                                        <button onClick={() => { const n = parseInt(currentFontSize)-2; setCurrentFontSize(n); applyFontSize(n); }} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><Minus size={14}/></button>
+                                    </div>
                                 </div>
-                                <div className="flex space-x-1.5">
+                                <div className="flex space-x-1">
                                     <ToolbarBtn icon={Bold} onClick={() => formatDoc('bold')} /><ToolbarBtn icon={Italic} onClick={() => formatDoc('italic')} /><ToolbarBtn icon={Underline} onClick={() => formatDoc('underline')} />
+                                    <ToolbarBtn icon={Strikethrough} onClick={() => formatDoc('strikeThrough')} /><ToolbarBtn icon={Subscript} onClick={() => formatDoc('subscript')} /><ToolbarBtn icon={Superscript} onClick={() => formatDoc('superscript')} />
+                                    <div className="w-px h-5 bg-gray-300 mx-2 self-center"></div>
+                                    <ToolbarBtn icon={Highlighter} onClick={() => formatDoc('backColor', 'yellow')} /><ToolbarBtn icon={Type} onClick={() => formatDoc('foreColor', 'red')} />
+                                    <ToolbarBtn icon={Eraser} onClick={() => formatDoc('removeFormat')} />
                                 </div>
                             </div>
                             <div className="flex flex-col space-y-2 border-r border-gray-200 dark:border-gray-600 pr-6 shrink-0 h-20 justify-center min-w-fit">
-                                <div className="flex space-x-1.5"><ToolbarBtn icon={List} onClick={() => formatDoc('insertUnorderedList')} /><ToolbarBtn icon={ListOrdered} onClick={() => formatDoc('insertOrderedList')} /></div>
-                                <div className="flex space-x-1.5"><ToolbarBtn icon={AlignLeft} onClick={() => formatDoc('justifyLeft')} /><ToolbarBtn icon={AlignCenter} onClick={() => formatDoc('justifyCenter')} /><ToolbarBtn icon={AlignRight} onClick={() => formatDoc('justifyRight')} /></div>
+                                <div className="flex space-x-1.5"><ToolbarBtn icon={List} onClick={() => formatDoc('insertUnorderedList')} /><ToolbarBtn icon={ListOrdered} onClick={() => formatDoc('insertOrderedList')} /><ToolbarBtn icon={Indent} onClick={() => formatDoc('indent')} /><ToolbarBtn icon={Outdent} onClick={() => formatDoc('outdent')} /></div>
+                                <div className="flex space-x-1.5"><ToolbarBtn icon={AlignLeft} onClick={() => formatDoc('justifyLeft')} /><ToolbarBtn icon={AlignCenter} onClick={() => formatDoc('justifyCenter')} /><ToolbarBtn icon={AlignRight} onClick={() => formatDoc('justifyRight')} /><ToolbarBtn icon={AlignJustify} onClick={() => formatDoc('justifyFull')} /></div>
+                            </div>
+                            <div className="flex items-center space-x-3 shrink-0 h-20">
+                                {['Normal', 'Heading 1', 'Heading 2', 'Heading 3', 'Quote'].map((style, i) => (
+                                <button key={style} onClick={() => formatDoc('formatBlock', style === 'Normal' ? 'P' : style === 'Quote' ? 'BLOCKQUOTE' : style === 'Heading 1' ? 'H1' : style === 'Heading 2' ? 'H2' : 'H3')} className="h-16 w-24 border border-gray-200 rounded bg-white hover:bg-[#f0f8ff] hover:border-[#0078d4] flex flex-col items-start p-2.5 transition-colors group text-left dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700">
+                                    <span className={`text-xs mt-0.5 w-full truncate ${i===0?'font-normal':i===1?'font-semibold text-[#2b579a] text-lg':i===2?'font-medium text-[#2b579a] text-base': i===3?'font-medium text-[#2b579a] text-sm': 'italic text-gray-500'}`}>AaBbCc</span>
+                                    <span className="text-[10px] text-gray-500 mt-auto w-full truncate group-hover:text-[#0078d4]">{style}</span>
+                                </button>
+                                ))}
                             </div>
                         </div>
                     );
@@ -875,83 +750,144 @@
             };
 
             if (view === 'dashboard') {
-                return <Dashboard documents={documents} onCreate={createNewDocument} onOpen={openDocument} onDelete={deleteDocument} userSettings={userSettings} onOpenSettings={() => setShowSettings(true)} />;
+                return (
+                    <>
+                        <Dashboard documents={documents} onCreate={createNewDocument} onOpen={openDocument} onDelete={deleteDocument} userSettings={userSettings} onOpenSettings={() => setShowSettings(true)} addToast={addToast} />
+                        <ToastContainer toasts={toasts} removeToast={removeToast} />
+                        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} settings={userSettings} onSave={saveSettings} />
+                    </>
+                );
             }
 
             return (
-                <div className={`flex flex-col h-screen font-sans overflow-hidden ${userSettings.theme === 'dark' ? 'bg-gray-900 text-gray-200' : 'bg-[#f0f0f0] text-[#323130]'}`}>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.html,.htm,.docx,.rtf" onChange={handleOpenFile} />
-                <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                <div className={`flex flex-col h-screen font-sans overflow-hidden transition-colors ${userSettings.theme === 'dark' ? 'bg-gray-900 text-gray-200' : 'bg-[#f0f0f0] text-[#323130]'}`}>
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.html,.htm,.docx,.rtf" onChange={handleOpenFile} />
+                    <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                    <ToastContainer toasts={toasts} removeToast={removeToast} />
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} settings={userSettings} onSave={saveSettings} />
 
-                <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} settings={userSettings} onSave={saveSettings} />
+                    {/* Top Bar */}
+                    <div className={`h-14 flex items-center justify-between px-4 shadow-sm border-b z-50 shrink-0 ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                        <div className="flex items-center space-x-4">
+                            <div className="p-2 hover:bg-blue-50 rounded cursor-pointer transition-colors text-[#0078d4]" onClick={goToDashboard}><ArrowLeft size={24} /></div>
+                            <div>
+                                <input type="text" value={fileName} onChange={(e) => { setFileName(e.target.value); setSaveStatus('Saving...'); }} className={`bg-transparent text-lg font-medium focus:outline-none px-2 rounded -ml-2 w-64 ${userSettings.theme === 'dark' ? 'text-white focus:bg-gray-700' : 'text-gray-800 focus:bg-gray-100'}`} />
+                                <div className="flex items-center gap-4 text-[11px] opacity-70 -mt-1">
+                                    <div className="flex">{['File', 'Home', 'Insert', 'Design', 'Layout'].map(t => (<button key={t} onClick={() => setActiveTab(t)} className={`px-3 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${activeTab === t ? 'font-bold text-[#0078d4]' : ''}`}>{t}</button>))}</div>
+                                    <span className="flex items-center gap-1 border-l pl-3 border-gray-300">{saveStatus === 'Saving...' ? <Cloud size={12} className="animate-pulse"/> : <Check size={12}/>} {saveStatus}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 md:gap-4">
+                            {/* Improved Find Toggle */}
+                            <div className={`flex items-center transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showFind ? 'w-72 bg-white dark:bg-gray-800 shadow-lg ring-1 ring-gray-200 dark:ring-gray-700 pl-3 pr-2' : 'w-9 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 justify-center'} h-9 rounded-full overflow-hidden relative`}>
+                                <button 
+                                    onClick={() => {
+                                        setShowFind(!showFind);
+                                        if(!showFind) setTimeout(() => document.getElementById('global-search')?.focus(), 50);
+                                    }} 
+                                    className={`shrink-0 flex items-center justify-center transition-colors ${showFind ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}`}
+                                >
+                                    <Search size={18} />
+                                </button>
+                                
+                                <input 
+                                    id="global-search"
+                                    type="text" 
+                                    placeholder="Find in document..." 
+                                    className={`bg-transparent border-none outline-none text-sm ml-2 w-full h-full text-gray-700 dark:text-gray-200 placeholder-gray-400 transition-opacity duration-200 ${showFind ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none absolute'}`}
+                                    onKeyDown={(e) => { if(e.key==='Enter') window.find(e.target.value) }}
+                                    value={findTerm}
+                                    onChange={(e) => setFindTerm(e.target.value)}
+                                />
 
-                {/* Editor Top Bar */}
-                <div className={`h-14 flex items-center justify-between px-4 shadow-sm border-b z-50 shrink-0 ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                    <div className="flex items-center space-x-4">
-                    <div className="p-2 hover:bg-[#e6f2ff] rounded cursor-pointer transition-colors" onClick={goToDashboard} title="Back to Dashboard">
-                        <FileTextIcon size={26} className="text-[#0078d4]" />
-                    </div>
-                    <div>
-                        <input type="text" value={fileName} onChange={(e) => { setFileName(e.target.value); setSaveStatus('Saving...'); }} className={`bg-transparent text-lg font-normal focus:outline-none px-2 rounded transition-colors w-64 -ml-2 ${userSettings.theme === 'dark' ? 'text-white focus:bg-gray-700' : 'text-gray-800 focus:bg-white'}`} />
-                        <div className="flex items-center gap-4 text-[12px] opacity-60 -mt-1">
-                            <div className="flex gap-2">{['File', 'Home', 'Insert', 'Design'].map(t => (<button key={t} onClick={() => setActiveTab(t)} className={`hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-0.5 rounded ${activeTab === t ? 'font-bold' : ''}`}>{t}</button>))}</div>
-                            <div className="flex items-center gap-1 pl-4 border-l border-gray-300">{saveStatus === 'Saving...' ? <Cloud size={14} className="animate-pulse" /> : <Check size={14} />}<span>{saveStatus}</span></div>
+                                {showFind && (
+                                    <button 
+                                        onClick={() => { setShowFind(false); setFindTerm(''); }} 
+                                        className="shrink-0 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-400 transition-colors animate-fadeIn"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            
+                            <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"><Settings size={20}/></button>
+                            <button onClick={() => setShowAIPanel(!showAIPanel)} className="flex items-center gap-2 bg-gradient-to-r from-[#0078d4] to-[#00bcf2] text-white px-4 py-1.5 rounded-full shadow hover:shadow-lg transition-all"><Sparkles size={16} /> AI Assistant</button>
+                            <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">{userSettings.initials}</div>
                         </div>
                     </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setShowSettings(true)} className={`p-2 rounded-full ${userSettings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}><Settings size={20}/></button>
-                        <button onClick={() => setShowAIPanel(!showAIPanel)} className="flex items-center gap-2 bg-gradient-to-r from-[#0078d4] to-[#005a9e] text-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"><Sparkles size={16} /><span className="text-sm font-medium">AI Assistant</span></button>
-                        <div className="w-9 h-9 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold ml-2">{userSettings.initials}</div>
-                    </div>
-                </div>
 
-                {/* Ribbon */}
-                <div className={`border-b shadow-sm shrink-0 z-40 select-none flex items-center w-full px-4 ${isRibbonOpen ? 'h-auto py-1' : 'h-0 overflow-hidden'} ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-[#f3f6fc] border-gray-300'}`}>
-                    {renderToolbar()}
-                </div>
-
-                {/* Main Content */}
-                <div className={`flex-1 flex overflow-hidden relative ${userSettings.theme === 'dark' ? 'bg-gray-900' : 'bg-[#f9fbfd]'}`}>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-8 flex flex-col items-center relative scroll-smooth">
-                        <div className="relative group transition-all duration-300 ease-in-out mt-6" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
-                            {watermark && (<div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden select-none"><span className="text-gray-300 font-bold transform -rotate-45 whitespace-nowrap opacity-30" style={{ fontSize: '10rem', mixBlendMode: 'multiply' }}>{watermark}</span></div>)}
-                            <div className="bg-white outline-none print:shadow-none print:m-0 print:w-full selection:bg-[#b3d7ff] text-black" contentEditable ref={editorRef} onPaste={handlePaste} onInput={handleEditorChange} onKeyUp={updateWordCount} onClick={updateWordCount} suppressContentEditableWarning style={{...getPageStyle(), transform: 'none', marginBottom: 0, backgroundColor: 'white'}}></div>
-                        </div>
+                    {/* Ribbon */}
+                    <div className={`border-b shadow-sm shrink-0 z-40 select-none flex items-center w-full px-4 transition-all ${isRibbonOpen ? 'h-auto py-1' : 'h-0 overflow-hidden'} ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-[#f3f6fc] border-gray-300'}`}>
+                        {renderToolbar()}
                     </div>
-                    
-                    {/* AI Panel */}
-                    <div className={`shadow-xl border-l flex flex-col transition-all duration-300 absolute right-0 top-0 bottom-0 z-30 ${showAIPanel ? 'w-80 translate-x-0' : 'w-80 translate-x-full'} ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                        <div className={`p-4 border-b flex justify-between items-center ${userSettings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-                            <h2 className="font-bold text-sm flex items-center gap-2"><Sparkles size={16} className="text-purple-600"/> AI Assistant</h2>
-                            <button onClick={() => setShowAIPanel(false)}><X size={18} className="opacity-50"/></button>
+
+                    {/* Ruler */}
+                    <Ruler isDark={userSettings.theme === 'dark'} />
+
+                    {/* Main Content */}
+                    <div className={`flex-1 flex overflow-hidden relative ${userSettings.theme === 'dark' ? 'bg-gray-900' : 'bg-[#f9fbfd]'}`}>
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden p-8 flex flex-col items-center relative scroll-smooth">
+                            <div className="relative group transition-all duration-300 ease-in-out mt-2 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
+                                {watermark && (<div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden select-none"><span className="text-gray-300 font-bold transform -rotate-45 whitespace-nowrap opacity-30" style={{ fontSize: '10rem', mixBlendMode: 'multiply' }}>{watermark}</span></div>)}
+                                <div className="bg-white outline-none print:shadow-none print:m-0 print:w-full selection:bg-[#b3d7ff] text-black" contentEditable ref={editorRef} onPaste={handlePaste} onInput={handleEditorChange} onKeyUp={updateWordCount} onClick={updateWordCount} suppressContentEditableWarning style={{...getPageStyle(), transform: 'none', marginBottom: 0, backgroundColor: 'white'}}></div>
+                                {/* Tight AI Integration: Floating Menu, Slash Menu, Inline AI */}
+                                <FloatingAIMenu position={floatingMenuPos} onAction={runAIAction} />
+                                <SlashMenu position={slashMenuPos} onSelect={handleSlashSelect} />
+                                {inlineAIPos && <InlineAIInput position={inlineAIPos} onSubmit={(p) => runAIAction('generate', p)} onClose={() => setInlineAIPos(null)} isLoading={aiLoading} />}
+                            </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 opacity-90">
-                            {aiResponse ? <div className={`p-3 rounded shadow-sm border text-sm prose prose-sm ${userSettings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'}`}>{aiResponse}</div> : <p className="text-center opacity-50 text-sm mt-10">How can I help you edit this document?</p>}
-                            {aiResponse && <button onClick={insertAIContent} className="w-full bg-[#0078d4] text-white py-2 rounded text-sm">Insert</button>}
-                        </div>
-                        <div className={`p-3 border-t ${userSettings.theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-white'}`}>
-                            <div className="relative">
-                                <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Ask AI..." className={`w-full border rounded-full px-4 py-2 text-sm pr-10 focus:outline-none focus:border-[#0078d4] ${userSettings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && callGemini(aiPrompt, selectedText)} />
-                                <button onClick={() => callGemini(aiPrompt, selectedText)} className="absolute right-2 top-1.5 text-[#0078d4]"><Sparkles size={16}/></button>
+                        
+                        {/* AI Panel */}
+                        <div className={`shadow-2xl border-l flex flex-col transition-all duration-300 absolute right-0 top-0 bottom-0 z-30 ${showAIPanel ? 'w-80 translate-x-0' : 'w-80 translate-x-full'} ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                            <div className={`p-4 border-b flex justify-between items-center ${userSettings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+                                <h2 className="font-bold text-sm flex items-center gap-2"><Sparkles size={16} className="text-purple-600"/> AI Assistant</h2>
+                                <button onClick={() => setShowAIPanel(false)}><X size={18} className="opacity-50 hover:opacity-100"/></button>
+                            </div>
+                            
+                             {/* Document Actions - Insights */}
+                             <div className={`p-3 border-b grid grid-cols-2 gap-2 ${userSettings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+                                <button onClick={() => runAIAction('summarize_doc')} className="flex flex-col items-center justify-center p-2 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors border border-transparent hover:border-purple-100">
+                                    <FileTextIcon size={16} className="text-purple-500 mb-1"/>
+                                    <span className="text-[10px] font-medium">Summarize</span>
+                                </button>
+                                <button onClick={() => runAIAction('critique_doc')} className="flex flex-col items-center justify-center p-2 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border border-transparent hover:border-blue-100">
+                                    <Zap size={16} className="text-blue-500 mb-1"/>
+                                    <span className="text-[10px] font-medium">Critique</span>
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 opacity-90">
+                                {aiResponse ? <div className={`p-3 rounded shadow-sm border text-sm prose prose-sm ${userSettings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'}`}>{aiResponse}</div> : <p className="text-center opacity-50 text-sm mt-10">How can I help you edit this document?</p>}
+                                {aiResponse && <button onClick={insertAIContent} className="w-full bg-[#0078d4] text-white py-2 rounded text-sm hover:bg-[#006bd0] transition-colors">Insert</button>}
+                            </div>
+                            <div className={`p-3 border-t ${userSettings.theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-white'}`}>
+                                <div className="relative">
+                                    <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Ask AI..." className={`w-full border rounded-full px-4 py-2 text-sm pr-10 focus:outline-none focus:border-[#0078d4] focus:ring-1 focus:ring-[#0078d4] transition-all ${userSettings.theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && callGemini(aiPrompt, selectedText)} />
+                                    <button onClick={() => callGemini(aiPrompt, selectedText)} className="absolute right-2 top-1.5 text-[#0078d4] hover:scale-110 transition-transform"><Sparkles size={16}/></button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+
+                    {/* Status Bar */}
+                    <div className={`h-7 border-t flex items-center justify-between px-4 text-[11px] select-none ${userSettings.theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-[#f3f6fc] border-gray-300 text-gray-600'}`}>
+                        <div className="flex gap-4"><span>Page 1 of 1</span><span>{totalWords} words</span><span className="uppercase">{language}</span></div>
+                        <div className="flex items-center gap-2"><button onClick={() => setZoomLevel(z => Math.max(50, z-10))}><Minus size={10}/></button><span>{zoomLevel}%</span><button onClick={() => setZoomLevel(z => Math.min(200, z+10))}><Plus size={10}/></button></div>
+                    </div>
                 </div>
             );
         };
 
-        // Components
         const ToolbarBtn = ({ icon: Icon, onClick, active }) => (
-        <button onClick={onClick} className={`p-2 rounded-sm transition-all ${active ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}><Icon size={18} strokeWidth={2} /></button>
+            <button onClick={onClick} className={`p-2 rounded transition-all ${active ? 'bg-gray-200 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'}`}><Icon size={18} strokeWidth={2} /></button>
         );
 
         const ToolbarAction = ({ icon: Icon, label, onClick }) => (
-        <button onClick={onClick} className="flex flex-col items-center justify-center px-4 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 min-w-[70px] transition-colors group">
-            <Icon size={24} strokeWidth={1.5} className="text-gray-500 dark:text-gray-400 group-hover:text-[#0078d4]" />
-            <span className="text-[11px] font-medium group-hover:text-[#0078d4] mt-1 opacity-70">{label}</span>
-        </button>
+            <button onClick={onClick} className="flex flex-col items-center justify-center px-4 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 min-w-[60px] transition-colors group text-gray-600 dark:text-gray-300">
+                <Icon size={20} strokeWidth={1.5} className="group-hover:text-[#0078d4]" />
+                <span className="text-[10px] mt-1 font-medium group-hover:text-[#0078d4]">{label}</span>
+            </button>
         );
 
         const container = document.getElementById('root');
